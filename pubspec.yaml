@@ -43,6 +43,7 @@ dependencies:
   path_provider:
   permission_handler:
   image_cropper:
+  # gallery_saver:
   # image_gallery_saver:
 
 dev_dependencies:

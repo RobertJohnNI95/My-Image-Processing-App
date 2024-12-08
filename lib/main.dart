@@ -313,10 +313,10 @@ class _MyProjectUIState extends State<MyProjectUI> {
             toolbarColor: Colors.lightBlue,
             toolbarWidgetColor: Colors.white,
             lockAspectRatio: false, // Unlock aspect ratio
-            aspectRatioPresets: [
-              CropAspectRatioPreset.original,
-              CropAspectRatioPreset.square,
-            ],
+            // aspectRatioPresets: [
+            //   CropAspectRatioPreset.original,
+            //   CropAspectRatioPreset.square,
+            // ],
           ),
           WebUiSettings(
             context: context,
@@ -418,54 +418,43 @@ class _MyProjectUIState extends State<MyProjectUI> {
     return threshold;
   }
 
-  Future<void> _saveImage() async {
-    if (_processedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("No image to save")),
-      );
-      return;
-    }
+  Future<void> _saveImage(Uint8List imageBytes) async {
+    Directory? directory;
+    if (Platform.isAndroid) {
+      if (await _requestStoragePermission()) {
+        directory =
+            await getExternalStorageDirectory(); // App-specific directory
+        String path = '${directory?.path}/Pictures';
+        Directory(path)
+            .createSync(recursive: true); // Ensure the directory exists
 
-    try {
-      // Request permissions for Android
-      if (Platform.isAndroid) {
-        if (await requestStoragePermission()) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Storage permission denied")),
-          );
-          return;
-        }
-      }
+        File savedImage = File(
+            'storage/emulated/0/Pictures/image_${DateTime.now().millisecondsSinceEpoch}.png');
+        await savedImage.writeAsBytes(imageBytes);
 
-      // Get the directory to save the image
-      final directory = await getApplicationDocumentsDirectory();
-      final filePath =
-          '${directory.path}/processed_image_${DateTime.now().millisecondsSinceEpoch}.png';
-
-      // Save the image as a file
-      final file = File(filePath);
-      await file.writeAsBytes(_processedImage!);
-
-      if (Platform.isAndroid) {
-        // Use MediaStore to save the file to the gallery
-        final androidPath = await file.copyToGallery();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Image saved to: $androidPath")),
+          SnackBar(
+            content:
+                Text("Image Saved Successfully in Internal Storage/Pictures"),
+            duration:
+                Duration(seconds: 3), // Duration the snackbar will be visible
+          ),
         );
-      } else if (Platform.isIOS) {
-        // Share the file on iOS (MediaStore is not available)
+        print("Image saved successfully in Internal Storage/Pictures");
+      } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Image saved at: $filePath")),
+          SnackBar(
+            content: Text("Storage permission denied"),
+            duration:
+                Duration(seconds: 3), // Duration the snackbar will be visible
+          ),
         );
+        print("Storage permission denied");
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error saving image: $e")),
-      );
     }
   }
 
-  Future<bool> requestStoragePermission() async {
+  Future<bool> _requestStoragePermission() async {
     if (await Permission.storage.isGranted) {
       return true; // Permission already granted
     } else if (await Permission.storage.request().isGranted) {
@@ -511,25 +500,33 @@ class _MyProjectUIState extends State<MyProjectUI> {
                   icon: const Icon(Icons.photo_library),
                 ),
                 IconButton(
-                  onPressed: _saveImage,
-                  icon: Icon(Icons.save),
-                ),
-                IconButton(
                   onPressed: _processedImage != null
                       ? () => _cropImage(_processedImage!)
                       : null,
                   icon: Icon(Icons.crop),
                 ),
                 IconButton(
-                    onPressed: () {
-                      if (_originalImage != null) {
-                        final rotatedImg = _rotateImage(_processedImage!, 90);
-                        setState(() {
-                          _processedImage = _originalImage = rotatedImg;
-                        });
-                      }
-                    },
-                    icon: Icon(Icons.rotate_90_degrees_cw))
+                  onPressed: _processedImage != null
+                      ? () {
+                          if (_originalImage != null) {
+                            final rotatedImg =
+                                _rotateImage(_processedImage!, 90);
+                            setState(() {
+                              _processedImage = _originalImage = rotatedImg;
+                            });
+                          }
+                        }
+                      : null,
+                  icon: Icon(Icons.rotate_90_degrees_cw),
+                ),
+                IconButton(
+                  onPressed: _processedImage != null
+                      ? () async {
+                          _saveImage(_processedImage!);
+                        }
+                      : null,
+                  icon: Icon(Icons.save),
+                ),
               ],
             ),
             _processedImage != null
