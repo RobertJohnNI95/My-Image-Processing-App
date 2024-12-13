@@ -8,17 +8,6 @@ import 'dart:typed_data';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_cropper/image_cropper.dart';
 
-extension FileSaver on File {
-  Future<String> copyToGallery() async {
-    final imagePath = this.path;
-    final mediaStorePath = '/storage/emulated/0/Pictures/';
-    final newFilePath = '$mediaStorePath${this.uri.pathSegments.last}';
-
-    final newFile = await this.copy(newFilePath);
-    return newFile.path;
-  }
-}
-
 void main() {
   runApp(MyImgProject());
   SystemChrome.setPreferredOrientations([
@@ -173,6 +162,95 @@ class _MyProjectUIState extends State<MyProjectUI> {
     return Uint8List.fromList(img.encodePng(image));
   }
 
+  /*
+  // EROSION
+  Uint8List? _applyErosion(Uint8List imageData, int kernelSize) {
+    imageData = _convertToBinary(imageData, _threshold)!;
+    final image = img.decodeImage(imageData);
+    if (image == null) return null;
+
+    final erodedImage = img.copyResize(image); // Create a copy for output
+    for (int y = 0; y < image.height; y++) {
+      for (int x = 0; x < image.width; x++) {
+        int minValue = 255; // Start with the max luminance
+
+        // Traverse the kernel
+        for (int ky = -kernelSize ~/ 2; ky <= kernelSize ~/ 2; ky++) {
+          for (int kx = -kernelSize ~/ 2; kx <= kernelSize ~/ 2; kx++) {
+            final nx = x + kx;
+            final ny = y + ky;
+
+            // Ensure the pixel is within bounds
+            if (nx >= 0 && nx < image.width && ny >= 0 && ny < image.height) {
+              final pixel = image.getPixel(nx, ny);
+              final luminance = img.getLuminance(pixel);
+              minValue =
+                  luminance.toInt() < minValue ? luminance.toInt() : minValue;
+            }
+          }
+        }
+
+        // Set the pixel to the minimum value
+        erodedImage.setPixel(x, y, img.ColorRgb8(minValue, minValue, minValue));
+      }
+    }
+
+    return Uint8List.fromList(img.encodePng(erodedImage));
+  }
+
+  // DILATION
+  Uint8List? _applyDilation(Uint8List imageData, int kernelSize) {
+    imageData = _convertToBinary(imageData, _threshold)!;
+    final image = img.decodeImage(imageData);
+    if (image == null) return null;
+
+    final dilatedImage = img.copyResize(image); // Create a copy for output
+    for (int y = 0; y < image.height; y++) {
+      for (int x = 0; x < image.width; x++) {
+        int maxValue = 0; // Start with the min luminance
+
+        // Traverse the kernel
+        for (int ky = -kernelSize ~/ 2; ky <= kernelSize ~/ 2; ky++) {
+          for (int kx = -kernelSize ~/ 2; kx <= kernelSize ~/ 2; kx++) {
+            final nx = x + kx;
+            final ny = y + ky;
+
+            // Ensure the pixel is within bounds
+            if (nx >= 0 && nx < image.width && ny >= 0 && ny < image.height) {
+              final pixel = image.getPixel(nx, ny);
+              final luminance = img.getLuminance(pixel);
+              maxValue =
+                  luminance.toInt() > maxValue ? luminance.toInt() : maxValue;
+            }
+          }
+        }
+
+        // Set the pixel to the maximum value
+        dilatedImage.setPixel(
+            x, y, img.ColorRgb8(maxValue, maxValue, maxValue));
+      }
+    }
+
+    return Uint8List.fromList(img.encodePng(dilatedImage));
+  }
+
+  // OPENING
+  Uint8List? _applyOpening(Uint8List imageData, int kernelSize) {
+    imageData = _convertToBinary(imageData, _threshold)!;
+    final eroded = _applyErosion(imageData, kernelSize);
+    if (eroded == null) return null;
+    return _applyDilation(eroded, kernelSize);
+  }
+
+  // CLOSING
+  Uint8List? _applyClosing(Uint8List imageData, int kernelSize) {
+    imageData = _convertToBinary(imageData, _threshold)!;
+    final dilated = _applyDilation(imageData, kernelSize);
+    if (dilated == null) return null;
+    return _applyErosion(dilated, kernelSize);
+  }
+  */
+
   // ROTATE IMAGE
   Uint8List? _rotateImage(Uint8List imageData, int degrees) {
     final image = img.decodeImage(imageData);
@@ -211,6 +289,24 @@ class _MyProjectUIState extends State<MyProjectUI> {
           _processedImage = _originalImage =
               _convertToInverseBinary(_originalColorImage!, _threshold);
           break;
+        /*
+        case "Erosion":
+          _processedImage = _originalImage =
+              _applyErosion(_originalColorImage!, 3); // Kernel size = 3
+          break;
+        case "Dilation":
+          _processedImage = _originalImage =
+              _applyDilation(_originalColorImage!, 3); // Kernel size = 3
+          break;
+        case "Opening":
+          _processedImage =
+              _originalImage = _applyOpening(_originalColorImage!, 3);
+          break;
+        case "Closing":
+          _processedImage =
+              _originalImage = _applyClosing(_originalColorImage!, 3);
+          break;
+        */
       }
       _updateSharpeningValue(_sharpeningValue);
       _updateSmoothingValue(_smoothingValue);
@@ -334,88 +430,6 @@ class _MyProjectUIState extends State<MyProjectUI> {
     } catch (e) {
       print("Error cropping image: $e");
     }
-  }
-
-  Uint8List? _segmentImage(Uint8List imageData, int threshold) {
-    final image = img.decodeImage(imageData);
-    if (image == null) return null;
-
-    // Convert to grayscale
-    final grayImage = img.grayscale(image);
-
-    // Apply segmentation
-    for (int y = 0; y < grayImage.height; y++) {
-      for (int x = 0; x < grayImage.width; x++) {
-        final pixelLuminance =
-            img.getLuminance(grayImage.getPixelSafe(x, y)).toInt();
-
-        // Segmentation threshold
-        final segmentedPixel = pixelLuminance > threshold ? 255 : 0;
-
-        // Set the pixel to the segmented value
-        grayImage.setPixelRgba(
-            x, y, segmentedPixel, segmentedPixel, segmentedPixel, 255);
-      }
-    }
-
-    return Uint8List.fromList(img.encodePng(grayImage));
-  }
-
-  int _otsuThreshold(Uint8List imageData) {
-    final image = img.decodeImage(imageData);
-    if (image == null) return 128; // Default threshold if decoding fails
-
-    // Convert to grayscale
-    final grayImage = img.grayscale(image);
-
-    // Calculate histogram
-    List<int> histogram = List.filled(256, 0);
-    for (int y = 0; y < grayImage.height; y++) {
-      for (int x = 0; x < grayImage.width; x++) {
-        final pixel = grayImage.getPixel(x, y);
-        final luminance = img.getLuminance(pixel);
-
-        // Cast the luminance to int before using it as an index
-        histogram[luminance.toInt()]++;
-      }
-    }
-
-    // Calculate total number of pixels
-    int total = grayImage.width * grayImage.height;
-
-    // Calculate cumulative sums and mean of the entire image
-    List<int> cumulativeSum = List.filled(256, 0);
-    List<int> cumulativeMean = List.filled(256, 0);
-    int sumB = 0;
-    int sumF = 0;
-    int totalB = 0;
-    int totalF = 0;
-    double maxVariance = 0;
-    int threshold = 0;
-
-    for (int i = 0; i < 256; i++) {
-      sumB += i * histogram[i];
-      totalB += histogram[i];
-      sumF = sumB;
-      totalF = totalB;
-
-      if (totalB > 0 && totalF < total) {
-        double wB = totalB / total;
-        double wF = totalF / total;
-        double meanB = sumB / totalB;
-        double meanF = sumF / totalF;
-        double betweenClassVariance =
-            wB * wF * (meanB - meanF) * (meanB - meanF);
-
-        if (betweenClassVariance > maxVariance) {
-          maxVariance = betweenClassVariance;
-          threshold = i;
-        }
-      }
-    }
-
-    // Return the calculated threshold
-    return threshold;
   }
 
   Future<void> _saveImage(Uint8List imageBytes) async {
@@ -579,7 +593,13 @@ class _MyProjectUIState extends State<MyProjectUI> {
                     "Grayscale",
                     "Inverse Grayscale",
                     "Binary",
-                    "Inverse Binary"
+                    "Inverse Binary",
+                    /*
+                    "Erosion",
+                    "Dilation",
+                    "Opening",
+                    "Closing"
+                    */
                   ]
                       .map((String value) => DropdownMenuItem<String>(
                             value: value,
@@ -673,30 +693,9 @@ class _MyProjectUIState extends State<MyProjectUI> {
                 ),
               ],
             ),
-            /*
-            ElevatedButton(
-              onPressed: () {
-                if (_originalImage != null) {
-                  setState(() {
-                    _processedImage = _segmentImage(
-                        _originalImage!, _otsuThreshold(_originalColorImage!));
-                  });
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("No image loaded for segmentation")),
-                  );
-                }
-              },
-              child: Text("Segmentation"),
-            ),
-            */
           ],
         ),
       ),
     );
   }
-}
-
-extension on Uint8List {
-  get path => null;
 }
