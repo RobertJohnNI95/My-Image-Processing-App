@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For Orientation Lock, Uint8List
 import 'package:image/image.dart' as img;
@@ -162,94 +163,70 @@ class _MyProjectUIState extends State<MyProjectUI> {
     return Uint8List.fromList(img.encodePng(image));
   }
 
-  /*
-  // EROSION
-  Uint8List? _applyErosion(Uint8List imageData, int kernelSize) {
-    imageData = _convertToBinary(imageData, _threshold)!;
+  Uint8List? _applySobelEdgeDetection(Uint8List imageData) {
     final image = img.decodeImage(imageData);
     if (image == null) return null;
 
-    final erodedImage = img.copyResize(image); // Create a copy for output
-    for (int y = 0; y < image.height; y++) {
-      for (int x = 0; x < image.width; x++) {
-        int minValue = 255; // Start with the max luminance
+    // Sobel kernels for X and Y gradients
+    final kernelX = [
+      -1,
+      0,
+      1,
+      -2,
+      0,
+      2,
+      -1,
+      0,
+      1,
+    ];
+    final kernelY = [
+      -1,
+      -2,
+      -1,
+      0,
+      0,
+      0,
+      1,
+      2,
+      1,
+    ];
 
-        // Traverse the kernel
-        for (int ky = -kernelSize ~/ 2; ky <= kernelSize ~/ 2; ky++) {
-          for (int kx = -kernelSize ~/ 2; kx <= kernelSize ~/ 2; kx++) {
-            final nx = x + kx;
-            final ny = y + ky;
+    // Create a new image for storing the edge map
+    final edgeMap = img.Image(width: image.width, height: image.height);
 
-            // Ensure the pixel is within bounds
-            if (nx >= 0 && nx < image.width && ny >= 0 && ny < image.height) {
-              final pixel = image.getPixel(nx, ny);
-              final luminance = img.getLuminance(pixel);
-              minValue =
-                  luminance.toInt() < minValue ? luminance.toInt() : minValue;
-            }
+    for (int y = 1; y < image.height - 1; y++) {
+      for (int x = 1; x < image.width - 1; x++) {
+        // Calculate gradients in X and Y directions
+        double gradientX = 0.0;
+        double gradientY = 0.0;
+
+        for (int ky = -1; ky <= 1; ky++) {
+          for (int kx = -1; kx <= 1; kx++) {
+            final pixel = image.getPixel(x + kx, y + ky);
+            gradientX +=
+                kernelX[(ky + 1) * 3 + kx + 1] * img.getLuminance(pixel);
+            gradientY +=
+                kernelY[(ky + 1) * 3 + kx + 1] * img.getLuminance(pixel);
           }
         }
 
-        // Set the pixel to the minimum value
-        erodedImage.setPixel(x, y, img.ColorRgb8(minValue, minValue, minValue));
+        // Calculate the magnitude of the gradient
+        double magnitude = sqrt(gradientX * gradientX + gradientY * gradientY);
+
+        // Normalize the magnitude to 0-255 range
+        magnitude = (magnitude / 255.0).clamp(0.0, 1.0) * 255.0;
+
+        // Set the pixel in the edge map
+        edgeMap.setPixel(
+            x,
+            y,
+            img.ColorRgb8(
+                magnitude.toInt(), magnitude.toInt(), magnitude.toInt()));
       }
     }
 
-    return Uint8List.fromList(img.encodePng(erodedImage));
+    return Uint8List.fromList(img.encodePng(edgeMap));
   }
-
-  // DILATION
-  Uint8List? _applyDilation(Uint8List imageData, int kernelSize) {
-    imageData = _convertToBinary(imageData, _threshold)!;
-    final image = img.decodeImage(imageData);
-    if (image == null) return null;
-
-    final dilatedImage = img.copyResize(image); // Create a copy for output
-    for (int y = 0; y < image.height; y++) {
-      for (int x = 0; x < image.width; x++) {
-        int maxValue = 0; // Start with the min luminance
-
-        // Traverse the kernel
-        for (int ky = -kernelSize ~/ 2; ky <= kernelSize ~/ 2; ky++) {
-          for (int kx = -kernelSize ~/ 2; kx <= kernelSize ~/ 2; kx++) {
-            final nx = x + kx;
-            final ny = y + ky;
-
-            // Ensure the pixel is within bounds
-            if (nx >= 0 && nx < image.width && ny >= 0 && ny < image.height) {
-              final pixel = image.getPixel(nx, ny);
-              final luminance = img.getLuminance(pixel);
-              maxValue =
-                  luminance.toInt() > maxValue ? luminance.toInt() : maxValue;
-            }
-          }
-        }
-
-        // Set the pixel to the maximum value
-        dilatedImage.setPixel(
-            x, y, img.ColorRgb8(maxValue, maxValue, maxValue));
-      }
-    }
-
-    return Uint8List.fromList(img.encodePng(dilatedImage));
-  }
-
-  // OPENING
-  Uint8List? _applyOpening(Uint8List imageData, int kernelSize) {
-    imageData = _convertToBinary(imageData, _threshold)!;
-    final eroded = _applyErosion(imageData, kernelSize);
-    if (eroded == null) return null;
-    return _applyDilation(eroded, kernelSize);
-  }
-
-  // CLOSING
-  Uint8List? _applyClosing(Uint8List imageData, int kernelSize) {
-    imageData = _convertToBinary(imageData, _threshold)!;
-    final dilated = _applyDilation(imageData, kernelSize);
-    if (dilated == null) return null;
-    return _applyErosion(dilated, kernelSize);
-  }
-  */
 
   // ROTATE IMAGE
   Uint8List? _rotateImage(Uint8List imageData, int degrees) {
@@ -289,24 +266,9 @@ class _MyProjectUIState extends State<MyProjectUI> {
           _processedImage = _originalImage =
               _convertToInverseBinary(_originalColorImage!, _threshold);
           break;
-        /*
-        case "Erosion":
-          _processedImage = _originalImage =
-              _applyErosion(_originalColorImage!, 3); // Kernel size = 3
-          break;
-        case "Dilation":
-          _processedImage = _originalImage =
-              _applyDilation(_originalColorImage!, 3); // Kernel size = 3
-          break;
-        case "Opening":
+        case "Edge Detection":
           _processedImage =
-              _originalImage = _applyOpening(_originalColorImage!, 3);
-          break;
-        case "Closing":
-          _processedImage =
-              _originalImage = _applyClosing(_originalColorImage!, 3);
-          break;
-        */
+              _originalImage = _applySobelEdgeDetection(_originalColorImage!);
       }
       _updateSharpeningValue(_sharpeningValue);
       _updateSmoothingValue(_smoothingValue);
@@ -561,27 +523,6 @@ class _MyProjectUIState extends State<MyProjectUI> {
                     ),
                   ),
             SizedBox(height: 10),
-            /*
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: _resetZoom,
-                  child: Text("Reset Zoom"),
-                ),
-                SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    final rotatedImg = _rotateImage(_processedImage!, 90);
-                    setState(() {
-                      _processedImage = _originalImage = rotatedImg;
-                    });
-                  },
-                  child: Text("Rotate 90°"),
-                ),
-              ],
-            ),
-            */
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -594,12 +535,7 @@ class _MyProjectUIState extends State<MyProjectUI> {
                     "Inverse Grayscale",
                     "Binary",
                     "Inverse Binary",
-                    /*
-                    "Erosion",
-                    "Dilation",
-                    "Opening",
-                    "Closing"
-                    */
+                    "Edge Detection",
                   ]
                       .map((String value) => DropdownMenuItem<String>(
                             value: value,
