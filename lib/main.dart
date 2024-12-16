@@ -43,6 +43,21 @@ class _MyProjectUIState extends State<MyProjectUI> {
   Uint8List? _originalColorImage;
   Uint8List? _originalImage;
   Uint8List? _processedImage;
+  Uint8List? get _loadedImage {
+    if (_originalColorImage == null) return null;
+    return _originalColorImage;
+  }
+
+  int? get _originalWidth {
+    if (_loadedImage == null) return null;
+    return _extractImageWidth(_loadedImage!);
+  }
+
+  int? get _originalHeight {
+    if (_loadedImage == null) return null;
+    return _extractImageHeight(_loadedImage!);
+  }
+
   final TransformationController _transformationController =
       TransformationController();
   String _selectedOption = "Original Colors";
@@ -50,6 +65,8 @@ class _MyProjectUIState extends State<MyProjectUI> {
   int _threshold = 70;
   double _sharpeningValue = 0.0;
   double _smoothingValue = 0.0;
+  final TextEditingController _widthController = TextEditingController();
+  final TextEditingController _heightController = TextEditingController();
 
   @override
   void initState() {
@@ -82,10 +99,20 @@ class _MyProjectUIState extends State<MyProjectUI> {
     }
   }
 
-  // RESET ZOOM
-  void _resetZoom() {
-    _transformationController.value = Matrix4.identity();
+  int? _extractImageWidth(Uint8List imageData) {
+    final image = img.decodeImage(imageData);
+    return image?.width; // Returns the width or null if decoding fails
   }
+
+  int? _extractImageHeight(Uint8List imageData) {
+    final image = img.decodeImage(imageData);
+    return image?.height; // Returns the height or null if decoding fails
+  }
+
+  // RESET ZOOM
+  // void _resetZoom() {
+  //   _transformationController.value = Matrix4.identity();
+  // }
 
   // RESTORE ORIGINAL COLORS
   void _restoreOriginalColors() {
@@ -394,6 +421,15 @@ class _MyProjectUIState extends State<MyProjectUI> {
     }
   }
 
+  Uint8List? _resizeImage(Uint8List imageData, int newWidth, int newHeight) {
+    final image = img.decodeImage(imageData);
+    if (image == null) return null;
+
+    final resizedImage =
+        img.copyResize(image, width: newWidth, height: newHeight);
+    return Uint8List.fromList(img.encodePng(resizedImage));
+  }
+
   Future<void> _saveImage(Uint8List imageBytes) async {
     Directory? directory;
     if (Platform.isAndroid) {
@@ -548,6 +584,101 @@ class _MyProjectUIState extends State<MyProjectUI> {
                     });
                     _applySelectedOption();
                   },
+                ),
+                SizedBox(height: 20),
+                Visibility(
+                  visible: _processedImage != null,
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 100,
+                            child: TextField(
+                              controller: _widthController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: "Width",
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          SizedBox(
+                            width: 100,
+                            child: TextField(
+                              controller: _heightController,
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: "Height",
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              final newWidth =
+                                  int.tryParse(_widthController.text);
+                              final newHeight =
+                                  int.tryParse(_heightController.text);
+
+                              if (newWidth != null && newHeight != null) {
+                                final resizedImage = _resizeImage(
+                                  _processedImage!,
+                                  newWidth,
+                                  newHeight,
+                                );
+                                setState(() {
+                                  _processedImage = resizedImage;
+                                });
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text("Please enter valid dimensions."),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text("Resize"),
+                          ),
+                          SizedBox(width: 10),
+                          ElevatedButton(
+                            onPressed: () {
+                              final newWidth = _originalWidth;
+                              final newHeight = _originalHeight;
+
+                              if (newWidth != null && newHeight != null) {
+                                final resizedImage = _resizeImage(
+                                  _processedImage!,
+                                  newWidth,
+                                  newHeight,
+                                );
+                                setState(() {
+                                  _processedImage = resizedImage;
+                                });
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text("Please enter valid dimensions."),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Text("Reset Size"),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 SizedBox(height: 20),
                 Visibility(
